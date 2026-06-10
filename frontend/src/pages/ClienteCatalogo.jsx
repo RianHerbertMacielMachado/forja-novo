@@ -178,15 +178,16 @@ const ClienteCatalogo = () => {
 
           <div>
             <label className="label">
-              Tag do Discord <span className="text-forge-text-muted">(opcional)</span>
+              ID do Discord <span className="text-forge-text-muted">(opcional)</span>
             </label>
             <input
               {...register('clienteDiscordTag')}
               className="input-field"
-              placeholder="usuario#1234 ou @usuario"
+              placeholder="Ex: 123456789012345678"
             />
             <p className="text-xs text-forge-text-muted mt-1">
-              💬 Preencha para receber notificações de status no Discord
+              💬 Preencha com seu <strong className="text-forge-gold">User ID numérico</strong> para receber notificações de status no Discord.
+              Para obter: abra o Discord → Configurações → Avançado → ative <em>Modo Desenvolvedor</em> → clique com botão direito no seu perfil → <em>Copiar ID do usuário</em>.
             </p>
           </div>
 

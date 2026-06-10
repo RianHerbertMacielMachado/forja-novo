@@ -166,8 +166,9 @@ const ForjadorCatalogo = () => {
               </>
             )}
             <div>
-              <label className="label">Discord (opcional)</label>
-              <input {...register('clienteDiscordTag')} className="input-field" placeholder="usuario#1234" />
+              <label className="label">ID do Discord (opcional)</label>
+              <input {...register('clienteDiscordTag')} className="input-field" placeholder="Ex: 123456789012345678" />
+              <p className="text-xs text-forge-text-muted mt-1">💬 User ID numérico para DMs de status</p>
             </div>
             <div className="bg-forge-panel2 rounded-lg p-3">
               <div className="flex justify-between font-bold">

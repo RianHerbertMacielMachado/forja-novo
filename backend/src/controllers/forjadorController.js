@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs')
 const pool = require('../database')
 const { criarPedido, getPedidoItens, calcularMateriais } = require('../services/pedidoService')
-const { notifyForjadorWebhook } = require('../services/discordService')
+const { notifyForjadorWebhook, notifyStatusAtualizado, sendDiscordDM } = require('../services/discordService')
 const { logAction } = require('../middleware/logMiddleware')
 const { statusLabel } = require('../utils/formatters')
 
@@ -146,6 +146,7 @@ const updateStatus = async (req, res) => {
     )
     const pedido = result.rows[0]
 
+    // Gravar log de atualização de status
     await logAction(
       'status_atualizado',
       `Status do pedido ${pedido.registro_id} atualizado para: ${statusLabel[status]}`,
@@ -153,6 +154,55 @@ const updateStatus = async (req, res) => {
       forjadorId,
       pedido.id
     )
+
+    // ── Notificações Discord (async, não bloqueiam a resposta) ──────────────
+    setImmediate(async () => {
+      try {
+        const itens = await getPedidoItens(pedido.id)
+
+        // 1. Buscar histórico de status do pedido nos logs
+        const logsResult = await pool.query(
+          `SELECT descricao, created_at,
+                  CASE
+                    WHEN descricao LIKE '%Na Fila%'               THEN 'na_fila'
+                    WHEN descricao LIKE '%Coletando Materiais%'   THEN 'coletando_materiais'
+                    WHEN descricao LIKE '%Em Produção%'           THEN 'em_producao'
+                    WHEN descricao LIKE '%Concluído%'             THEN 'concluido'
+                    ELSE NULL
+                  END as status
+           FROM logs
+           WHERE pedido_id = $1
+             AND tipo = 'status_atualizado'
+           ORDER BY created_at ASC`,
+          [pedido.id]
+        )
+        const historico = logsResult.rows.filter(r => r.status !== null)
+
+        // 2. Notificar webhook pessoal do forjador com histórico
+        const forjadorResult = await pool.query(
+          'SELECT discord_webhook, nome FROM forjadores WHERE id = $1',
+          [forjadorId]
+        )
+        const forjador = forjadorResult.rows[0]
+        if (forjador?.discord_webhook) {
+          await notifyStatusAtualizado(
+            forjador.discord_webhook,
+            pedido,
+            itens,
+            status,
+            historico
+          )
+        }
+
+        // 3. Enviar DM ao cliente se ele informou Discord ID
+        if (pedido.cliente_discord_tag) {
+          await sendDiscordDM(pedido.cliente_discord_tag, pedido, itens, status)
+        }
+      } catch (notifyErr) {
+        console.error('[updateStatus] Erro nas notificações Discord:', notifyErr.message)
+      }
+    })
+    // ────────────────────────────────────────────────────────────────────────
 
     res.json({ message: 'Status atualizado!', pedido })
   } catch (err) {
