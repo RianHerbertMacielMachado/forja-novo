@@ -20,7 +20,7 @@ const ForjadorCatalogo = () => {
 
   useEffect(() => {
     api.get('/forjador/produtos')
-      .then(res => setProdutos(res.data))
+      .then(res => setProdutos(Array.isArray(res.data) ? res.data : []))
       .catch(() => toast.error('Erro ao carregar produtos'))
       .finally(() => setLoading(false))
   }, [])

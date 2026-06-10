@@ -22,8 +22,8 @@ const AdminLogs = () => {
     setLoading(true)
     try {
       const res = await api.get('/admin/logs', { params: { page, limit: 50, ...filtros } })
-      setLogs(res.data.logs)
-      setPagination({ page: res.data.page, pages: res.data.pages, total: res.data.total })
+      setLogs(Array.isArray(res.data.logs) ? res.data.logs : [])
+      setPagination({ page: res.data.page || 1, pages: res.data.pages || 1, total: res.data.total || 0 })
     } catch { toast.error('Erro ao carregar logs') }
     finally { setLoading(false) }
   }, [filtros])

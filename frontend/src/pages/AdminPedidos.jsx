@@ -17,14 +17,14 @@ const AdminPedidos = () => {
     try {
       const params = { page, limit: 20, ...filtros }
       const res = await api.get('/admin/pedidos', { params })
-      setPedidos(res.data.pedidos)
-      setPagination({ page: res.data.page, pages: res.data.pages, total: res.data.total })
+      setPedidos(Array.isArray(res.data.pedidos) ? res.data.pedidos : [])
+      setPagination({ page: res.data.page || 1, pages: res.data.pages || 1, total: res.data.total || 0 })
     } catch { toast.error('Erro ao buscar pedidos') }
     finally { setLoading(false) }
   }, [filtros])
 
   useEffect(() => { fetchPedidos() }, [fetchPedidos])
-  useEffect(() => { api.get('/admin/forjadores').then(r => setForjadores(r.data)).catch(() => {}) }, [])
+  useEffect(() => { api.get('/admin/forjadores').then(r => setForjadores(Array.isArray(r.data) ? r.data : [])).catch(() => {}) }, [])
 
   const verDetalhes = async (id) => {
     try {

@@ -11,7 +11,7 @@ const ForjadorFila = () => {
   const fetchFila = useCallback(async () => {
     try {
       const res = await api.get('/forjador/fila')
-      setPedidos(res.data)
+      setPedidos(Array.isArray(res.data) ? res.data : [])
     } catch (err) {
       toast.error('Erro ao carregar fila')
     } finally {

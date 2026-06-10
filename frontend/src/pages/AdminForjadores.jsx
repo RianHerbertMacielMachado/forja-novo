@@ -17,7 +17,7 @@ const AdminForjadores = () => {
   const fetchForjadores = async () => {
     try {
       const res = await api.get('/admin/forjadores')
-      setForjadores(res.data)
+      setForjadores(Array.isArray(res.data) ? res.data : [])
     } catch { toast.error('Erro ao carregar forjadores') }
     finally { setLoading(false) }
   }

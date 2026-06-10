@@ -12,7 +12,7 @@ const ForjadorTransferencias = () => {
   const fetchTransferencias = useCallback(async () => {
     try {
       const res = await api.get('/forjador/transferencias')
-      setTransferencias(res.data)
+      setTransferencias(Array.isArray(res.data) ? res.data : [])
     } catch (err) {
       toast.error('Erro ao carregar transferências')
     } finally {

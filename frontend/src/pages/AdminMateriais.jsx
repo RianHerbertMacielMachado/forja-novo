@@ -16,7 +16,7 @@ const AdminMateriais = () => {
   const fetchMateriais = async () => {
     try {
       const res = await api.get('/admin/materiais')
-      setMateriais(res.data)
+      setMateriais(Array.isArray(res.data) ? res.data : [])
     } catch { toast.error('Erro ao carregar materiais') }
     finally { setLoading(false) }
   }

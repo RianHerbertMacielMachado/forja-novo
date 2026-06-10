@@ -21,8 +21,8 @@ const AdminProdutos = () => {
         api.get('/admin/produtos'),
         api.get('/admin/materiais')
       ])
-      setProdutos(prodRes.data)
-      setMateriais(matRes.data)
+      setProdutos(Array.isArray(prodRes.data) ? prodRes.data : [])
+      setMateriais(Array.isArray(matRes.data) ? matRes.data : [])
     } catch { toast.error('Erro ao carregar dados') }
     finally { setLoading(false) }
   }

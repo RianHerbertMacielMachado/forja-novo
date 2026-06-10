@@ -15,7 +15,7 @@ const ForjadorMeusPedidos = () => {
   const fetchPedidos = useCallback(async () => {
     try {
       const res = await api.get('/forjador/meus-pedidos')
-      setPedidos(res.data)
+      setPedidos(Array.isArray(res.data) ? res.data : [])
     } catch (err) {
       toast.error('Erro ao carregar pedidos')
     } finally {
@@ -25,7 +25,7 @@ const ForjadorMeusPedidos = () => {
 
   useEffect(() => {
     fetchPedidos()
-    api.get('/forjador/forjadores').then(res => setForjadores(res.data)).catch(() => {})
+    api.get('/forjador/forjadores').then(res => setForjadores(Array.isArray(res.data) ? res.data : [])).catch(() => {})
     const interval = setInterval(fetchPedidos, 60000)
     return () => clearInterval(interval)
   }, [fetchPedidos])

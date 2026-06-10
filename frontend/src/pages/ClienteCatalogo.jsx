@@ -25,7 +25,7 @@ const ClienteCatalogo = () => {
     const fetchProdutos = async () => {
       try {
         const res = await api.get('/cliente/produtos')
-        setProdutos(res.data)
+        setProdutos(Array.isArray(res.data) ? res.data : [])
       } catch (err) {
         toast.error('Erro ao carregar produtos')
       } finally {
