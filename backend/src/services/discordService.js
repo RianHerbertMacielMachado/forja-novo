@@ -1,12 +1,12 @@
 const fetch = require('node-fetch')
 const pool  = require('../database')
 const { formatDate, statusLabel } = require('../utils/formatters')
-const FORJA_AVATAR = require('../assets/forja_avatar_b64')
 
 // ─── Identidade do bot nas webhooks ──────────────────────────────────────────
+// Nota: Discord exige URL pública (http/https) para avatar_url — base64 inline não é aceito
 const WEBHOOK_IDENTITY = {
   username:   '⚔️ Forja de Armas',
-  avatar_url: FORJA_AVATAR
+  avatar_url: 'https://i.imgur.com/Tzx8t1M.jpeg'
 }
 
 // ─── Cores por status ────────────────────────────────────────────────────────
