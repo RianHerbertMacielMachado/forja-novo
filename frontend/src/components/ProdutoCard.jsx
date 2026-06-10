@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from 'react-toastify'
 import { useCarrinho } from '../context/CarrinhoContext'
 
-const ProdutoCard = ({ produto, mostrarAddCarrinho = true, onAdd }) => {
+const ProdutoCard = ({ produto, mostrarAddCarrinho = true, mostrarMateriais = true, onAdd }) => {
   const [quantidade, setQuantidade] = useState(produto.multiplo_quantidade || 1)
   const { addItem } = useCarrinho()
 
@@ -66,7 +66,7 @@ const ProdutoCard = ({ produto, mostrarAddCarrinho = true, onAdd }) => {
         </p>
 
         {/* Materiais necessários */}
-        {produto.materiais && produto.materiais.length > 0 && (
+        {mostrarMateriais && produto.materiais && produto.materiais.length > 0 && (
           <div className="pt-2 border-t border-forge-border">
             <p className="text-xs text-forge-text-muted mb-1.5">⚒️ Materiais:</p>
             <div className="flex flex-wrap gap-1">
