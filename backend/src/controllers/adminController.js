@@ -130,46 +130,51 @@ const deleteForjador = async (req, res) => {
 
 // Listar todos os pedidos (admin)
 const getPedidos = async (req, res) => {
-  const { status, forjador_id, registro_id, passaporte, page = 1, limit = 20, data_inicio, data_fim } = req.query
+  const { page = 1, limit = 20, data_inicio, data_fim } = req.query
+  // Tratar strings vazias como ausentes
+  const status      = req.query.status      || null
+  const forjador_id = req.query.forjador_id || null
+  const registro_id = req.query.registro_id || null
+  const passaporte  = req.query.passaporte  || null
   try {
-    let query = `
-      SELECT p.*, f.nome as forjador_nome,
-      (SELECT json_agg(json_build_object('produto_nome', pr.nome, 'quantidade', pi.quantidade))
-       FROM pedido_itens pi JOIN produtos pr ON pr.id = pi.produto_id WHERE pi.pedido_id = p.id) as itens
-      FROM pedidos p
-      LEFT JOIN forjadores f ON p.forjador_id = f.id
-      WHERE 1=1`
-    const params = []
+    let whereClause = 'WHERE 1=1'
+    const filterParams = []
     let paramCount = 0
 
-    if (status) { params.push(status); query += ` AND p.status = $${++paramCount}` }
-    if (forjador_id) { params.push(forjador_id); query += ` AND p.forjador_id = $${++paramCount}` }
-    if (registro_id) { params.push(`%${registro_id}%`); query += ` AND p.registro_id ILIKE $${++paramCount}` }
-    if (passaporte) { params.push(`%${passaporte}%`); query += ` AND p.cliente_passaporte ILIKE $${++paramCount}` }
-    if (data_inicio) { params.push(data_inicio); query += ` AND p.created_at >= $${++paramCount}` }
-    if (data_fim) { params.push(data_fim); query += ` AND p.created_at <= $${++paramCount}::date + interval '1 day'` }
+    if (status)      { filterParams.push(status);              whereClause += ` AND p.status = $${++paramCount}` }
+    if (forjador_id) { filterParams.push(forjador_id);         whereClause += ` AND p.forjador_id = $${++paramCount}` }
+    if (registro_id) { filterParams.push(`%${registro_id}%`);  whereClause += ` AND p.registro_id ILIKE $${++paramCount}` }
+    if (passaporte)  { filterParams.push(`%${passaporte}%`);   whereClause += ` AND p.cliente_passaporte ILIKE $${++paramCount}` }
+    if (data_inicio) { filterParams.push(data_inicio);         whereClause += ` AND p.created_at >= $${++paramCount}` }
+    if (data_fim)    { filterParams.push(data_fim);            whereClause += ` AND p.created_at <= $${++paramCount}::date + interval '1 day'` }
 
-    query += ` ORDER BY p.created_at DESC`
-
+    // COUNT separado com os mesmos filtros (sem subquery de itens para melhor performance)
     const countResult = await pool.query(
-      `SELECT COUNT(*) FROM pedidos p WHERE 1=1` +
-      (status ? ` AND status = '${status}'` : '') +
-      (forjador_id ? ` AND forjador_id = ${forjador_id}` : ''), []
+      `SELECT COUNT(*) FROM pedidos p ${whereClause}`,
+      filterParams
     )
 
-    const offset = (page - 1) * limit
-    params.push(limit, offset)
-    query += ` LIMIT $${++paramCount} OFFSET $${++paramCount}`
+    // Query principal com paginação
+    const pageParams = [...filterParams, parseInt(limit), (parseInt(page) - 1) * parseInt(limit)]
+    const result = await pool.query(
+      `SELECT p.*, f.nome as forjador_nome,
+       (SELECT json_agg(json_build_object('produto_nome', pr.nome, 'quantidade', pi.quantidade))
+        FROM pedido_itens pi JOIN produtos pr ON pr.id = pi.produto_id WHERE pi.pedido_id = p.id) as itens
+       FROM pedidos p
+       LEFT JOIN forjadores f ON p.forjador_id = f.id
+       ${whereClause}
+       ORDER BY p.created_at DESC LIMIT $${++paramCount} OFFSET $${++paramCount}`,
+      pageParams
+    )
 
-    const result = await pool.query(query, params)
     res.json({
       pedidos: result.rows,
       total: parseInt(countResult.rows[0].count),
       page: parseInt(page),
-      pages: Math.ceil(parseInt(countResult.rows[0].count) / limit)
+      pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit))
     })
   } catch (err) {
-    console.error(err)
+    console.error('[getPedidos]', err.message)
     res.status(500).json({ error: 'Erro ao buscar pedidos' })
   }
 }
@@ -202,30 +207,39 @@ const getPedidoDetalhes = async (req, res) => {
 
 // Logs do sistema
 const getLogs = async (req, res) => {
-  const { tipo, page = 1, limit = 50, data_inicio, data_fim } = req.query
+  // tipo='' (string vazia) deve ser tratado como ausente
+  const { page = 1, limit = 50, data_inicio, data_fim } = req.query
+  const tipo = req.query.tipo || null
   try {
-    let query = 'SELECT * FROM logs WHERE 1=1'
-    const params = []
+    let whereClause = 'WHERE 1=1'
+    const filterParams = []
     let paramCount = 0
 
-    if (tipo) { params.push(tipo); query += ` AND tipo = $${++paramCount}` }
-    if (data_inicio) { params.push(data_inicio); query += ` AND created_at >= $${++paramCount}` }
-    if (data_fim) { params.push(data_fim); query += ` AND created_at <= $${++paramCount}::date + interval '1 day'` }
+    if (tipo) { filterParams.push(tipo); whereClause += ` AND tipo = $${++paramCount}` }
+    if (data_inicio) { filterParams.push(data_inicio); whereClause += ` AND created_at >= $${++paramCount}` }
+    if (data_fim) { filterParams.push(data_fim); whereClause += ` AND created_at <= $${++paramCount}::date + interval '1 day'` }
 
-    query += ' ORDER BY created_at DESC'
-    const countResult = await pool.query(query.replace('SELECT *', 'SELECT COUNT(*)'), params)
+    // COUNT separado — sem ORDER BY para evitar erro no PostgreSQL
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM logs ${whereClause}`,
+      filterParams
+    )
 
-    params.push(limit, (page - 1) * limit)
-    query += ` LIMIT $${++paramCount} OFFSET $${++paramCount}`
+    // Query principal com paginação
+    const pageParams = [...filterParams, parseInt(limit), (parseInt(page) - 1) * parseInt(limit)]
+    const result = await pool.query(
+      `SELECT * FROM logs ${whereClause} ORDER BY created_at DESC LIMIT $${++paramCount} OFFSET $${++paramCount}`,
+      pageParams
+    )
 
-    const result = await pool.query(query, params)
     res.json({
       logs: result.rows,
       total: parseInt(countResult.rows[0].count),
       page: parseInt(page),
-      pages: Math.ceil(parseInt(countResult.rows[0].count) / limit)
+      pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit))
     })
   } catch (err) {
+    console.error('[getLogs]', err.message)
     res.status(500).json({ error: 'Erro ao buscar logs' })
   }
 }
