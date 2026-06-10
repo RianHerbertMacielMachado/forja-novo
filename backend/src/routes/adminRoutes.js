@@ -4,7 +4,7 @@ const { authAdmin } = require('../middleware/authMiddleware')
 const {
   getDashboard, getForjadores, updateForjador, resetSenhaForjador, deleteForjador,
   getPedidos, getPedidoDetalhes, getLogs, exportarLogs,
-  getProdutos, createProduto, updateProduto,
+  getProdutos, createProduto, updateProduto, deleteProduto,
   getMateriais, createMaterial, updateMaterial, deleteMaterial,
   getConfiguracoes, updateConfiguracao, gerarNovoToken, testarWebhook, alterarSenhaAdmin
 } = require('../controllers/adminController')
@@ -30,6 +30,7 @@ router.get('/logs/export', authAdmin, exportarLogs)
 router.get('/produtos', authAdmin, getProdutos)
 router.post('/produtos', authAdmin, createProduto)
 router.put('/produtos/:id', authAdmin, updateProduto)
+router.delete('/produtos/:id', authAdmin, deleteProduto)
 
 // Materiais
 router.get('/materiais', authAdmin, getMateriais)

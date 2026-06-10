@@ -292,6 +292,49 @@ const createProduto = async (req, res) => {
   }
 }
 
+const deleteProduto = async (req, res) => {
+  const { id } = req.params
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    // Verificar se o produto está em algum pedido ativo (não concluído)
+    const emUso = await client.query(
+      `SELECT COUNT(*) FROM pedido_itens pi
+       JOIN pedidos p ON p.id = pi.pedido_id
+       WHERE pi.produto_id = $1 AND p.status != 'concluido'`,
+      [id]
+    )
+    if (parseInt(emUso.rows[0].count) > 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Produto está em pedidos ativos. Conclua ou remova os pedidos antes de deletar.' })
+    }
+
+    // Remover materiais do produto primeiro (FK)
+    await client.query('DELETE FROM produto_materiais WHERE produto_id = $1', [id])
+
+    // Remover itens de pedidos concluídos (histórico)
+    await client.query('DELETE FROM pedido_itens WHERE produto_id = $1', [id])
+
+    // Deletar o produto
+    const result = await client.query('DELETE FROM produtos WHERE id = $1 RETURNING nome', [id])
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Produto não encontrado' })
+    }
+
+    await client.query('COMMIT')
+    await logAction('produto_deletado', `Produto "${result.rows[0].nome}" (ID ${id}) deletado pelo admin`, 'admin', null)
+    res.json({ message: `Produto "${result.rows[0].nome}" deletado com sucesso!` })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('[deleteProduto]', err.message)
+    res.status(500).json({ error: 'Erro ao deletar produto' })
+  } finally {
+    client.release()
+  }
+}
+
 const updateProduto = async (req, res) => {
   const { id } = req.params
   const { nome, tipo, valor_unitario, quantidade_minima, multiplo_quantidade, ativo, materiais } = req.body
@@ -496,7 +539,7 @@ const exportarLogs = async (req, res) => {
 module.exports = {
   getDashboard, getForjadores, updateForjador, resetSenhaForjador, deleteForjador,
   getPedidos, getPedidoDetalhes, getLogs, exportarLogs,
-  getProdutos, createProduto, updateProduto,
+  getProdutos, createProduto, updateProduto, deleteProduto,
   getMateriais, createMaterial, updateMaterial, deleteMaterial,
   getConfiguracoes, updateConfiguracao, gerarNovoToken, testarWebhook, alterarSenhaAdmin
 }

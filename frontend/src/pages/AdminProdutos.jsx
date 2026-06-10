@@ -9,6 +9,9 @@ const AdminProdutos = () => {
   const [materiais, setMateriais] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
+  const [modalConfirmDelete, setModalConfirmDelete] = useState(false)
+  const [produtoParaDeletar, setProdutoParaDeletar] = useState(null)
+  const [deletando, setDeletando] = useState(false)
   const [editando, setEditando] = useState(null)
   const [matProduto, setMatProduto] = useState([])
   const [salvando, setSalvando] = useState(false)
@@ -48,6 +51,25 @@ const AdminProdutos = () => {
       ativo: produto.ativo
     })
     setModalAberto(true)
+  }
+
+  const confirmarDeletar = (produto) => {
+    setProdutoParaDeletar(produto)
+    setModalConfirmDelete(true)
+  }
+
+  const executarDeletar = async () => {
+    if (!produtoParaDeletar) return
+    setDeletando(true)
+    try {
+      const res = await api.delete(`/admin/produtos/${produtoParaDeletar.id}`)
+      toast.success(res.data.message || 'Produto deletado!')
+      setModalConfirmDelete(false)
+      setProdutoParaDeletar(null)
+      fetchData()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao deletar produto')
+    } finally { setDeletando(false) }
   }
 
   const onSalvar = handleSubmit(async (data) => {
@@ -149,10 +171,30 @@ const AdminProdutos = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => abrirEditar(p)} className="text-blue-400 hover:text-blue-300 text-sm">✏️</button>
-                        <button onClick={() => toggleAtivo(p)} className={`text-sm ${p.ativo ? 'text-red-400 hover:text-red-300' : 'text-green-400 hover:text-green-300'}`}>
+                      <div className="flex items-center justify-center gap-3">
+                        {/* Editar */}
+                        <button
+                          onClick={() => abrirEditar(p)}
+                          title="Editar produto"
+                          className="text-purple-400 hover:text-purple-200 transition-colors text-base"
+                        >
+                          ✏️
+                        </button>
+                        {/* Ativar/Desativar */}
+                        <button
+                          onClick={() => toggleAtivo(p)}
+                          title={p.ativo ? 'Desativar produto' : 'Ativar produto'}
+                          className={`text-base transition-colors ${p.ativo ? 'text-orange-400 hover:text-orange-300' : 'text-green-400 hover:text-green-300'}`}
+                        >
                           {p.ativo ? '🚫' : '✅'}
+                        </button>
+                        {/* Deletar */}
+                        <button
+                          onClick={() => confirmarDeletar(p)}
+                          title="Deletar produto permanentemente"
+                          className="text-red-500 hover:text-red-300 transition-colors text-base"
+                        >
+                          🗑️
                         </button>
                       </div>
                     </td>
@@ -245,6 +287,49 @@ const AdminProdutos = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal de confirmação de deleção */}
+      <Modal
+        isOpen={modalConfirmDelete}
+        onClose={() => { setModalConfirmDelete(false); setProdutoParaDeletar(null) }}
+        title="🗑️ Confirmar Exclusão"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="p-4 rounded-lg border border-red-800/50 bg-red-900/20">
+            <p className="text-forge-text text-sm">
+              Você está prestes a deletar permanentemente o produto:
+            </p>
+            <p className="text-red-300 font-bold text-lg mt-2">
+              {produtoParaDeletar?.nome}
+            </p>
+            <p className="text-forge-text-muted text-xs mt-2">
+              ⚠️ Esta ação não pode ser desfeita. O produto será removido do sistema junto com seus materiais configurados.
+            </p>
+            <p className="text-forge-text-muted text-xs mt-1">
+              Pedidos concluídos que contêm este produto também terão os itens removidos do histórico.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { setModalConfirmDelete(false); setProdutoParaDeletar(null) }}
+              className="btn-ghost flex-1 justify-center"
+              disabled={deletando}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={executarDeletar}
+              disabled={deletando}
+              className="btn-danger flex-1 justify-center"
+            >
+              {deletando ? '⏳ Deletando...' : '🗑️ Deletar Permanentemente'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
