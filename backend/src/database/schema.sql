@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
   total NUMERIC(10,2) NOT NULL,
   origem VARCHAR(20) CHECK(origem IN ('cliente','forjador')) DEFAULT 'cliente',
   sem_dados_cliente BOOLEAN DEFAULT FALSE,
+  discord_forjador_message_id VARCHAR(30),
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

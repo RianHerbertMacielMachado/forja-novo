@@ -158,7 +158,8 @@ const updateStatus = async (req, res) => {
     // ── Notificações Discord (async, não bloqueiam a resposta) ──────────────
     setImmediate(async () => {
       try {
-        const itens = await getPedidoItens(pedido.id)
+        const itens     = await getPedidoItens(pedido.id)
+        const materiais = await calcularMateriais(itens)
 
         // 1. Buscar histórico de status do pedido nos logs
         const logsResult = await pool.query(
@@ -178,7 +179,7 @@ const updateStatus = async (req, res) => {
         )
         const historico = logsResult.rows.filter(r => r.status !== null)
 
-        // 2. Notificar webhook pessoal do forjador com histórico
+        // 2. Notificar webhook pessoal do forjador — EDITA mensagem existente
         const forjadorResult = await pool.query(
           'SELECT discord_webhook, nome FROM forjadores WHERE id = $1',
           [forjadorId]
@@ -189,8 +190,10 @@ const updateStatus = async (req, res) => {
             forjador.discord_webhook,
             pedido,
             itens,
+            materiais,     // ← materiais calculados
             status,
-            historico
+            historico,
+            forjador.nome  // ← nome do forjador
           )
         }
 

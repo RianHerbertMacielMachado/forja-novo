@@ -1,5 +1,5 @@
 const fetch = require('node-fetch')
-const pool = require('../database')
+const pool  = require('../database')
 const { formatDate, statusLabel } = require('../utils/formatters')
 
 // ─── Cores por status ────────────────────────────────────────────────────────
@@ -18,24 +18,63 @@ const statusEmoji = {
   concluido:           '✅'
 }
 
+// ─── Helpers internos ────────────────────────────────────────────────────────
+
 /**
- * Envia mensagem para uma webhook do Discord
+ * Envia (POST) ou edita (PATCH) uma mensagem em uma webhook do Discord.
+ * @param {string} webhookUrl  URL completa da webhook
+ * @param {object} payload     Corpo JSON da mensagem
+ * @param {string|null} messageId  Se fornecido, edita a mensagem; caso contrário, cria uma nova
+ * @param {boolean} waitResponse   Se true, usa ?wait=true para obter o objeto de mensagem de volta
+ * @returns {{ success: boolean, messageId?: string, error?: string }}
  */
-const sendWebhook = async (webhookUrl, payload) => {
+const sendOrEditWebhook = async (webhookUrl, payload, messageId = null, waitResponse = false) => {
   if (!webhookUrl) return { success: false, error: 'Webhook não configurada' }
+
   try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
+    let url, method
+
+    if (messageId) {
+      // Editar mensagem existente via PATCH
+      const parts = webhookUrl.replace(/\/$/, '').split('/')
+      const wId    = parts[parts.length - 2]
+      const wToken = parts[parts.length - 1]
+      url    = `https://discord.com/api/webhooks/${wId}/${wToken}/messages/${messageId}`
+      method = 'PATCH'
+    } else {
+      // Criar nova mensagem via POST
+      url    = waitResponse ? `${webhookUrl}?wait=true` : webhookUrl
+      method = 'POST'
+    }
+
+    const response = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
+
     if (!response.ok) {
       const text = await response.text()
+      // Se a mensagem original sumiu (404), sinaliza para criar uma nova
+      if (response.status === 404 && messageId) {
+        return { success: false, notFound: true, error: `Mensagem ${messageId} não encontrada` }
+      }
       return { success: false, error: `Discord retornou ${response.status}: ${text}` }
     }
+
+    // Retorna o id da mensagem criada (só disponível quando waitResponse=true ou PATCH)
+    if (method === 'POST' && waitResponse) {
+      const data = await response.json()
+      return { success: true, messageId: data.id }
+    }
+    if (method === 'PATCH') {
+      const data = await response.json()
+      return { success: true, messageId: data.id }
+    }
+
     return { success: true }
   } catch (err) {
-    console.error('Erro ao enviar webhook:', err.message)
+    console.error('Erro ao enviar/editar webhook:', err.message)
     return { success: false, error: err.message }
   }
 }
@@ -46,6 +85,146 @@ const sendWebhook = async (webhookUrl, payload) => {
 const getConfig = async (chave) => {
   const result = await pool.query('SELECT valor FROM configuracoes WHERE chave = $1', [chave])
   return result.rows[0]?.valor || ''
+}
+
+/**
+ * Salva o discord_forjador_message_id no pedido
+ */
+const savePedidoMessageId = async (pedidoId, messageId) => {
+  await pool.query(
+    'UPDATE pedidos SET discord_forjador_message_id = $1 WHERE id = $2',
+    [messageId, pedidoId]
+  )
+}
+
+/**
+ * Monta o embed completo do pedido com histórico de status.
+ * Usado tanto na criação quanto na edição da mensagem.
+ *
+ * @param {object}   pedido        Linha da tabela pedidos
+ * @param {array}    itens         Itens do pedido (com produto_nome, quantidade)
+ * @param {array}    materiais     Materiais calculados (nome, total)
+ * @param {array}    historicoStatus  [{ status, created_at }] — em ordem cronológica
+ * @param {string}   forjadorNome  Nome do forjador responsável
+ */
+const buildPedidoEmbed = (pedido, itens, materiais, historicoStatus, forjadorNome) => {
+  const statusAtual   = pedido.status
+  const cor           = statusColor[statusAtual] || 0x7C3AED
+  const emoji         = statusEmoji[statusAtual] || '🔔'
+
+  const itensText     = itens.map(i => `• ${i.produto_nome} x${i.quantidade}`).join('\n')     || 'Nenhum item'
+  const materiaisText = materiais && materiais.length
+    ? materiais.map(m => `• ${m.nome} x${m.total}`).join('\n')
+    : 'Sem materiais'
+
+  // Histórico: uma linha por entrada, com emoji e data
+  const historicoText = historicoStatus.length
+    ? historicoStatus.map(h => {
+        const em = statusEmoji[h.status] || '•'
+        const lb = statusLabel[h.status] || h.status
+        return `${em} **${lb}** — ${formatDate(h.created_at)}`
+      }).join('\n')
+    : `${emoji} **${statusLabel[statusAtual]}** — ${formatDate(new Date())}`
+
+  return {
+    embeds: [{
+      title: `⚒️ Pedido ${pedido.registro_id}`,
+      color: cor,
+      fields: [
+        { name: '👤 Cliente',               value: pedido.cliente_nome       || 'Não informado', inline: true  },
+        { name: '🪪 Passaporte',            value: pedido.cliente_passaporte || 'Não informado', inline: true  },
+        { name: '📦 Itens do Pedido',        value: itensText,                                    inline: false },
+        { name: '⚒️ Materiais Necessários', value: materiaisText,                                 inline: false },
+        { name: '💰 Total',                 value: `R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}`, inline: true  },
+        { name: '📊 Status Atual',          value: `${emoji} **${statusLabel[statusAtual]}**`,   inline: true  },
+        { name: '📋 Histórico de Status',   value: historicoText,                                 inline: false }
+      ],
+      footer: { text: `Forjador: ${forjadorNome} | Última atualização: ${formatDate(new Date())}` }
+    }]
+  }
+}
+
+// ─── Funções públicas ────────────────────────────────────────────────────────
+
+/**
+ * Notifica forjador via webhook pessoal ao PUXAR pedido.
+ * Cria a mensagem inicial e salva o message_id no banco.
+ */
+const notifyForjadorWebhook = async (forjadorWebhook, pedido, itens, materiais, forjadorNome) => {
+  if (!forjadorWebhook) return
+
+  try {
+    // Histórico inicial: só o status atual (na_fila ou coletando — conforme puxado)
+    const historicoInicial = [{
+      status:     pedido.status,
+      created_at: pedido.created_at || new Date()
+    }]
+
+    const payload = buildPedidoEmbed(pedido, itens, materiais, historicoInicial, forjadorNome)
+
+    // POST com ?wait=true para obter o message_id de volta
+    const result = await sendOrEditWebhook(forjadorWebhook, payload, null, true)
+
+    if (result.success && result.messageId) {
+      await savePedidoMessageId(pedido.id, result.messageId)
+      console.log(`[Discord] Mensagem criada para pedido ${pedido.registro_id} — messageId: ${result.messageId}`)
+    } else {
+      console.error('[Discord] Falha ao criar mensagem do pedido:', result.error)
+    }
+  } catch (err) {
+    console.error('Erro ao notificar forjador webhook (puxar):', err.message)
+  }
+}
+
+/**
+ * Atualiza (EDITA) a mensagem do forjador ao mudar status do pedido.
+ * Busca o message_id salvo no banco e faz PATCH na mensagem existente,
+ * acrescentando o novo status ao histórico.
+ * Se a mensagem não existir mais (foi deletada), cria uma nova.
+ */
+const notifyStatusAtualizado = async (forjadorWebhook, pedido, itens, materiais, novoStatus, historicoLogs, forjadorNome) => {
+  if (!forjadorWebhook) return
+
+  try {
+    // Busca o message_id salvo no banco para este pedido
+    const pedidoRow = await pool.query(
+      'SELECT discord_forjador_message_id FROM pedidos WHERE id = $1',
+      [pedido.id]
+    )
+    const messageId = pedidoRow.rows[0]?.discord_forjador_message_id || null
+
+    // Monta o embed com o histórico completo
+    const pedidoAtualizado = { ...pedido, status: novoStatus }
+    const payload = buildPedidoEmbed(pedidoAtualizado, itens, materiais, historicoLogs, forjadorNome)
+
+    if (messageId) {
+      // Tenta editar a mensagem existente via PATCH
+      const result = await sendOrEditWebhook(forjadorWebhook, payload, messageId)
+
+      if (!result.success && result.notFound) {
+        // Mensagem foi deletada — cria uma nova e salva o novo id
+        console.warn(`[Discord] Mensagem ${messageId} não encontrada, criando nova...`)
+        const newResult = await sendOrEditWebhook(forjadorWebhook, payload, null, true)
+        if (newResult.success && newResult.messageId) {
+          await savePedidoMessageId(pedido.id, newResult.messageId)
+          console.log(`[Discord] Nova mensagem criada para pedido ${pedido.registro_id} — messageId: ${newResult.messageId}`)
+        }
+      } else if (!result.success) {
+        console.error('[Discord] Falha ao editar mensagem:', result.error)
+      } else {
+        console.log(`[Discord] Mensagem editada — pedido ${pedido.registro_id} → ${novoStatus}`)
+      }
+    } else {
+      // Nunca houve mensagem (forjador não tinha webhook ao puxar) — cria agora
+      const result = await sendOrEditWebhook(forjadorWebhook, payload, null, true)
+      if (result.success && result.messageId) {
+        await savePedidoMessageId(pedido.id, result.messageId)
+        console.log(`[Discord] Mensagem inicial criada para pedido ${pedido.registro_id} — messageId: ${result.messageId}`)
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao atualizar mensagem de status:', err.message)
+  }
 }
 
 /**
@@ -64,91 +243,19 @@ const notifyNovoPedido = async (pedido, itens) => {
         description: 'Um novo pedido foi adicionado à fila.',
         color: 0x3447DB,
         fields: [
-          { name: '👤 Cliente',    value: pedido.cliente_nome       || 'Não informado', inline: true },
-          { name: '🪪 Passaporte', value: pedido.cliente_passaporte || 'Não informado', inline: true },
+          { name: '👤 Cliente',    value: pedido.cliente_nome       || 'Não informado', inline: true  },
+          { name: '🪪 Passaporte', value: pedido.cliente_passaporte || 'Não informado', inline: true  },
           { name: '📦 Itens',      value: itensText,                                    inline: false },
           { name: '💰 Total',      value: `R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}`, inline: true },
-          { name: '🆔 Registro',   value: pedido.registro_id,                           inline: true }
+          { name: '🆔 Registro',   value: pedido.registro_id,                           inline: true  }
         ],
         footer: { text: `Pedido recebido em: ${formatDate(pedido.created_at)}` }
       }]
     }
 
-    await sendWebhook(webhookUrl, payload)
+    await sendOrEditWebhook(webhookUrl, payload)
   } catch (err) {
     console.error('Erro ao notificar novo pedido:', err.message)
-  }
-}
-
-/**
- * Notifica forjador via webhook pessoal ao puxar pedido
- */
-const notifyForjadorWebhook = async (forjadorWebhook, pedido, itens, materiais, forjadorNome) => {
-  if (!forjadorWebhook) return
-
-  try {
-    const itensText      = itens.map(i => `• ${i.produto_nome} x${i.quantidade}`).join('\n')     || 'Nenhum item'
-    const materiaisText  = materiais.map(m => `• ${m.nome} x${m.total}`).join('\n')               || 'Sem materiais'
-
-    const payload = {
-      embeds: [{
-        title: `⚒️ Pedido ${pedido.registro_id} atribuído a você`,
-        color: 0x57D68A,
-        fields: [
-          { name: '👤 Cliente',               value: pedido.cliente_nome       || 'Não informado', inline: true },
-          { name: '🪪 Passaporte',            value: pedido.cliente_passaporte || 'Não informado', inline: true },
-          { name: '📦 Itens do Pedido',        value: itensText,                                    inline: false },
-          { name: '⚒️ Materiais Necessários', value: materiaisText,                                 inline: false },
-          { name: '💰 Total',                 value: `R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}`, inline: true }
-        ],
-        footer: { text: `Forjador: ${forjadorNome} | ${formatDate(new Date())}` }
-      }]
-    }
-
-    await sendWebhook(forjadorWebhook, payload)
-  } catch (err) {
-    console.error('Erro ao notificar forjador webhook:', err.message)
-  }
-}
-
-/**
- * Notifica forjador via webhook pessoal sobre atualização de status
- * Inclui histórico de todas as atualizações anteriores do pedido
- */
-const notifyStatusAtualizado = async (forjadorWebhook, pedido, itens, novoStatus, historicoLogs) => {
-  if (!forjadorWebhook) return
-
-  try {
-    const itensText = itens.map(i => `• ${i.produto_nome} x${i.quantidade}`).join('\n') || 'Nenhum item'
-
-    // Montar histórico de status a partir dos logs
-    const historicoText = historicoLogs.length > 0
-      ? historicoLogs.map(log => {
-          const emoji = statusEmoji[log.status] || '•'
-          return `${emoji} **${statusLabel[log.status] || log.status}** — ${formatDate(log.created_at)}`
-        }).join('\n')
-      : `${statusEmoji[novoStatus] || '•'} **${statusLabel[novoStatus]}** — ${formatDate(new Date())}`
-
-    const cor = statusColor[novoStatus] || 0x7C3AED
-
-    const payload = {
-      embeds: [{
-        title: `${statusEmoji[novoStatus] || '🔔'} Pedido ${pedido.registro_id} — Status Atualizado`,
-        color: cor,
-        fields: [
-          { name: '👤 Cliente',     value: pedido.cliente_nome       || 'Não informado', inline: true },
-          { name: '🪪 Passaporte',  value: pedido.cliente_passaporte || 'Não informado', inline: true },
-          { name: '📦 Itens',       value: itensText,                                    inline: false },
-          { name: '📊 Novo Status', value: `${statusEmoji[novoStatus]} **${statusLabel[novoStatus]}**`, inline: false },
-          { name: '📋 Histórico de Status', value: historicoText,                        inline: false }
-        ],
-        footer: { text: `Atualizado em: ${formatDate(new Date())}` }
-      }]
-    }
-
-    await sendWebhook(forjadorWebhook, payload)
-  } catch (err) {
-    console.error('Erro ao notificar atualização de status:', err.message)
   }
 }
 
@@ -171,7 +278,7 @@ const updateTokenMessage = async (token) => {
         fields: [
           { name: '🔑 Chave atual:', value: `\`\`\`${token}\`\`\``, inline: false },
           {
-            name: 'ℹ️ Instruções',
+            name:  'ℹ️ Instruções',
             value: 'Use esta chave para cadastrar um novo forjador.\nA chave é de uso único — ao ser usada, uma nova será gerada.',
             inline: false
           }
@@ -181,18 +288,9 @@ const updateTokenMessage = async (token) => {
     }
 
     if (messageId) {
-      const webhookParts = webhookUrl.split('/')
-      const webhookId    = webhookParts[webhookParts.length - 2]
-      const webhookToken = webhookParts[webhookParts.length - 1]
-      const editUrl      = `https://discord.com/api/webhooks/${webhookId}/${webhookToken}/messages/${messageId}`
-
-      const editResponse = await fetch(editUrl, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-
-      if (!editResponse.ok) {
+      const result = await sendOrEditWebhook(webhookUrl, payload, messageId)
+      if (!result.success && result.notFound) {
+        // Mensagem sumiu — recria
         await createNewTokenMessage(webhookUrl, payload)
       }
     } else {
@@ -204,38 +302,18 @@ const updateTokenMessage = async (token) => {
 }
 
 const createNewTokenMessage = async (webhookUrl, payload) => {
-  const urlWithWait = `${webhookUrl}?wait=true`
-  const response = await fetch(urlWithWait, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-
-  if (response.ok) {
-    const data = await response.json()
-    if (data.id) {
-      await pool.query(
-        'UPDATE configuracoes SET valor = $1 WHERE chave = $2',
-        [data.id, 'webhook_token_cadastro_message_id']
-      )
-    }
+  const result = await sendOrEditWebhook(webhookUrl, payload, null, true)
+  if (result.success && result.messageId) {
+    await pool.query(
+      'UPDATE configuracoes SET valor = $1 WHERE chave = $2',
+      [result.messageId, 'webhook_token_cadastro_message_id']
+    )
   }
 }
 
 /**
- * Envia DM para cliente no Discord via Bot Token
- *
- * Fluxo correto da API v10:
- *  1. POST /users/@me/channels  { recipient_id }  → cria/obtém DM channel
- *  2. POST /channels/{id}/messages  { embeds: [...] }  → envia mensagem
- *
- * Para obter o recipient_id, o Discord não permite busca por username.
- * O cliente precisa ter informado o User ID numérico (17-19 dígitos)
- * OU o sistema pode tentar pela tag antiga "usuario#1234" via Guild Members
- * se o bot estiver no servidor. Aqui suportamos ambos os formatos:
- *  - Só números → trata como User ID direto
- *  - "nome#discriminador" → tenta resolver via Discord CDN lookup (não funciona sem guild)
- *    e registra aviso orientando a usar o User ID
+ * Envia DM para cliente no Discord via Bot Token (Discord API v10)
+ * Requer que o cliente tenha fornecido seu User ID numérico (17-19 dígitos)
  */
 const sendDiscordDM = async (discordTag, pedido, itens, novoStatus) => {
   if (!discordTag) return
@@ -246,80 +324,61 @@ const sendDiscordDM = async (discordTag, pedido, itens, novoStatus) => {
   }
 
   try {
-    // Determinar recipient_id
-    let recipientId = null
     const soNumeros = /^\d{17,19}$/.test(discordTag.trim())
-
-    if (soNumeros) {
-      // Já é um User ID puro
-      recipientId = discordTag.trim()
-    } else {
-      // Formato "usuario#1234" ou "@usuario" — não temos como resolver sem guild
+    if (!soNumeros) {
       console.warn(
         `[Discord DM] "${discordTag}" não é um User ID numérico. ` +
-        'Para DMs funcionarem, o cliente deve informar o ID Discord (17-19 dígitos). ' +
-        'Acesse Configurações → Avançado → Modo Desenvolvedor no Discord e clique com o botão direito no seu perfil.'
+        'O cliente deve informar o User ID do Discord (17-19 dígitos).'
       )
       return
     }
 
+    const recipientId = discordTag.trim()
+
     // 1. Criar / abrir canal DM
     const dmChannelRes = await fetch('https://discord.com/api/v10/users/@me/channels', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bot ${botToken}`
-      },
-      body: JSON.stringify({ recipient_id: recipientId })
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bot ${botToken}` },
+      body:    JSON.stringify({ recipient_id: recipientId })
     })
-
     if (!dmChannelRes.ok) {
-      const err = await dmChannelRes.text()
-      console.error(`[Discord DM] Falha ao criar canal DM (${dmChannelRes.status}):`, err)
+      console.error(`[Discord DM] Falha ao criar canal (${dmChannelRes.status}):`, await dmChannelRes.text())
       return
     }
+    const { id: channelId } = await dmChannelRes.json()
 
-    const dmChannel = await dmChannelRes.json()
-    const channelId = dmChannel.id
-
-    // 2. Montar embed da mensagem
-    const itensText   = itens.map(i => `• ${i.produto_nome} x${i.quantidade}`).join('\n') || 'Nenhum item'
-    const cor         = statusColor[novoStatus] || 0x7C3AED
+    // 2. Montar embed da atualização
     const emoji       = statusEmoji[novoStatus] || '🔔'
-    const labelStatus = statusLabel[novoStatus] || novoStatus
+    const labelStatus = statusLabel[novoStatus]  || novoStatus
+    const cor         = statusColor[novoStatus]  || 0x7C3AED
+    const itensText   = itens.map(i => `• ${i.produto_nome} x${i.quantidade}`).join('\n') || 'Nenhum item'
 
     const msgPayload = {
       embeds: [{
-        title: `${emoji} Atualização do seu Pedido ${pedido.registro_id}`,
+        title:       `${emoji} Atualização do seu Pedido ${pedido.registro_id}`,
         description: `Seu pedido foi atualizado para: **${labelStatus}**`,
-        color: cor,
+        color:       cor,
         fields: [
-          { name: '📊 Status Atual', value: `${emoji} **${labelStatus}**`,                                                 inline: true },
-          { name: '🆔 Registro ID', value: pedido.registro_id,                                                             inline: true },
-          { name: '📦 Itens',       value: itensText,                                                                      inline: false },
-          { name: '💰 Total',       value: `R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}`,                  inline: true },
-          { name: '🕐 Atualizado',  value: formatDate(new Date()),                                                         inline: true }
+          { name: '📊 Status Atual', value: `${emoji} **${labelStatus}**`,                                        inline: true  },
+          { name: '🆔 Registro ID',  value: pedido.registro_id,                                                    inline: true  },
+          { name: '📦 Itens',        value: itensText,                                                             inline: false },
+          { name: '💰 Total',        value: `R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}`,         inline: true  },
+          { name: '🕐 Atualizado',   value: formatDate(new Date()),                                                inline: true  }
         ],
         footer: { text: 'Sistema de Forja — Acompanhe seu pedido pelo Registro ID' }
       }]
     }
 
-    // 3. Enviar mensagem no canal DM
+    // 3. Enviar mensagem
     const msgRes = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bot ${botToken}`
-      },
-      body: JSON.stringify(msgPayload)
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bot ${botToken}` },
+      body:    JSON.stringify(msgPayload)
     })
-
     if (!msgRes.ok) {
-      const err = await msgRes.text()
-      console.error(`[Discord DM] Falha ao enviar mensagem (${msgRes.status}):`, err)
+      console.error(`[Discord DM] Falha ao enviar DM (${msgRes.status}):`, await msgRes.text())
       return
     }
-
     console.log(`[Discord DM] ✅ DM enviada para ${recipientId} — pedido ${pedido.registro_id} → ${labelStatus}`)
   } catch (err) {
     console.error('[Discord DM] Erro inesperado:', err.message)
@@ -332,22 +391,23 @@ const sendDiscordDM = async (discordTag, pedido, itens, novoStatus) => {
 const testWebhook = async (webhookUrl) => {
   const payload = {
     embeds: [{
-      title: '✅ Teste de Webhook',
+      title:       '✅ Teste de Webhook',
       description: 'Esta é uma mensagem de teste do Sistema de Forja.',
-      color: 0x57D68A,
-      footer: { text: `Testado em: ${formatDate(new Date())}` }
+      color:       0x57D68A,
+      footer:      { text: `Testado em: ${formatDate(new Date())}` }
     }]
   }
-  return await sendWebhook(webhookUrl, payload)
+  return await sendOrEditWebhook(webhookUrl, payload)
 }
 
 module.exports = {
-  sendWebhook,
   notifyNovoPedido,
   notifyForjadorWebhook,
   notifyStatusAtualizado,
   updateTokenMessage,
   sendDiscordDM,
   testWebhook,
-  getConfig
+  getConfig,
+  // mantido para compatibilidade interna
+  sendWebhook: (url, payload) => sendOrEditWebhook(url, payload)
 }

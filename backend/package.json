@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "migrate": "node src/database/migrate.js"
+    "migrate": "node src/database/migrate.js",
+    "migration": "node src/database/run_migration.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
