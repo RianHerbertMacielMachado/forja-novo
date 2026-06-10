@@ -1,6 +1,13 @@
 const fetch = require('node-fetch')
 const pool  = require('../database')
 const { formatDate, statusLabel } = require('../utils/formatters')
+const FORJA_AVATAR = require('../assets/forja_avatar_b64')
+
+// ─── Identidade do bot nas webhooks ──────────────────────────────────────────
+const WEBHOOK_IDENTITY = {
+  username:   '⚔️ Forja de Armas',
+  avatar_url: FORJA_AVATAR
+}
 
 // ─── Cores por status ────────────────────────────────────────────────────────
 const statusColor = {
@@ -160,7 +167,7 @@ const notifyForjadorWebhook = async (forjadorWebhook, pedido, itens, materiais, 
       created_at: pedido.created_at || new Date()
     }]
 
-    const payload = buildPedidoEmbed(pedido, itens, materiais, historicoInicial, forjadorNome)
+    const payload = { ...buildPedidoEmbed(pedido, itens, materiais, historicoInicial, forjadorNome), ...WEBHOOK_IDENTITY }
 
     // POST com ?wait=true para obter o message_id de volta
     const result = await sendOrEditWebhook(forjadorWebhook, payload, null, true)
@@ -195,7 +202,7 @@ const notifyStatusAtualizado = async (forjadorWebhook, pedido, itens, materiais,
 
     // Monta o embed com o histórico completo
     const pedidoAtualizado = { ...pedido, status: novoStatus }
-    const payload = buildPedidoEmbed(pedidoAtualizado, itens, materiais, historicoLogs, forjadorNome)
+    const payload = { ...buildPedidoEmbed(pedidoAtualizado, itens, materiais, historicoLogs, forjadorNome), ...WEBHOOK_IDENTITY }
 
     if (messageId) {
       // Tenta editar a mensagem existente via PATCH
@@ -238,6 +245,7 @@ const notifyNovoPedido = async (pedido, itens) => {
     const itensText = itens.map(i => `• ${i.produto_nome} x${i.quantidade}`).join('\n') || 'Nenhum item'
 
     const payload = {
+      ...WEBHOOK_IDENTITY,
       embeds: [{
         title: '🛒 Novo Pedido de Cliente!',
         description: 'Um novo pedido foi adicionado à fila.',
@@ -271,6 +279,7 @@ const updateTokenMessage = async (token) => {
     const dataHora  = formatDate(new Date())
 
     const payload = {
+      ...WEBHOOK_IDENTITY,
       embeds: [{
         title: '🔑 Chave de Cadastro Atualizada',
         description: 'A chave anterior foi utilizada e uma nova foi gerada.',
@@ -390,6 +399,7 @@ const sendDiscordDM = async (discordTag, pedido, itens, novoStatus) => {
  */
 const testWebhook = async (webhookUrl) => {
   const payload = {
+    ...WEBHOOK_IDENTITY,
     embeds: [{
       title:       '✅ Teste de Webhook',
       description: 'Esta é uma mensagem de teste do Sistema de Forja.',
