@@ -142,6 +142,7 @@ const ForjadorConfiguracoes = () => {
             <input
               {...registerSenha('senhaAtual', { required: 'Obrigatório' })}
               type="password"
+              autoComplete="current-password"
               className="input-field"
               placeholder="Sua senha atual"
             />
@@ -156,6 +157,7 @@ const ForjadorConfiguracoes = () => {
                 minLength: { value: 8, message: 'Mínimo 8 caracteres' }
               })}
               type="password"
+              autoComplete="new-password"
               className="input-field"
               placeholder="Nova senha (mínimo 8 caracteres)"
             />
@@ -170,6 +172,7 @@ const ForjadorConfiguracoes = () => {
                 validate: (val) => val === novaSenha || 'Senhas não coincidem'
               })}
               type="password"
+              autoComplete="new-password"
               className="input-field"
               placeholder="Confirmar nova senha"
             />

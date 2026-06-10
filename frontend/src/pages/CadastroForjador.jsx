@@ -54,17 +54,17 @@ const CadastroForjador = () => {
             </div>
             <div>
               <label className="label">Nome de Usuário *</label>
-              <input {...register('username', { required: 'Obrigatório', minLength: { value: 3, message: 'Mínimo 3 caracteres' } })} className="input-field" placeholder="forjador123" />
+              <input {...register('username', { required: 'Obrigatório', minLength: { value: 3, message: 'Mínimo 3 caracteres' } })} className="input-field" placeholder="forjador123" autoComplete="username" />
               {errors.username && <p className="text-red-400 text-xs mt-1">{errors.username.message}</p>}
             </div>
             <div>
               <label className="label">Senha * (mínimo 8 caracteres)</label>
-              <input {...register('password', { required: 'Obrigatório', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })} type="password" className="input-field" placeholder="••••••••" />
+              <input {...register('password', { required: 'Obrigatório', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })} type="password" autoComplete="new-password" className="input-field" placeholder="••••••••" />
               {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
             </div>
             <div>
               <label className="label">Confirmar Senha *</label>
-              <input {...register('confirmPassword', { required: 'Obrigatório', validate: v => v === senha || 'Senhas não coincidem' })} type="password" className="input-field" placeholder="••••••••" />
+              <input {...register('confirmPassword', { required: 'Obrigatório', validate: v => v === senha || 'Senhas não coincidem' })} type="password" autoComplete="new-password" className="input-field" placeholder="••••••••" />
               {errors.confirmPassword && <p className="text-red-400 text-xs mt-1">{errors.confirmPassword.message}</p>}
             </div>
             <div>

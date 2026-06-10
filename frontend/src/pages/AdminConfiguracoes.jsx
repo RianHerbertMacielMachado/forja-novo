@@ -186,6 +186,7 @@ const AdminConfiguracoes = () => {
         <div className="flex gap-2">
           <input
             type="password"
+            autoComplete="off"
             value={config.discord_bot_token === '***configurado***' ? '' : (config.discord_bot_token || '')}
             onChange={e => setConfig(prev => ({ ...prev, discord_bot_token: e.target.value }))}
             className="input-field flex-1 text-sm"
@@ -213,19 +214,19 @@ const AdminConfiguracoes = () => {
         <form onSubmit={onAlterarSenha} className="space-y-4">
           <div>
             <label className="label">Senha Atual *</label>
-            <input {...regSenha('senhaAtual', { required: true })} type="password" className="input-field" placeholder="Senha atual" />
+            <input {...regSenha('senhaAtual', { required: true })} type="password" autoComplete="current-password" className="input-field" placeholder="Senha atual" />
             {errSenha.senhaAtual && <p className="text-red-400 text-xs mt-1">Obrigatório</p>}
           </div>
           <div>
             <label className="label">Nova Senha * (mínimo 8 caracteres)</label>
-            <input {...regSenha('novaSenha', { required: true, minLength: 8 })} type="password" className="input-field" placeholder="Nova senha" />
+            <input {...regSenha('novaSenha', { required: true, minLength: 8 })} type="password" autoComplete="new-password" className="input-field" placeholder="Nova senha" />
             {errSenha.novaSenha && <p className="text-red-400 text-xs mt-1">Mínimo 8 caracteres</p>}
           </div>
           <div>
             <label className="label">Confirmar Nova Senha *</label>
             <input
               {...regSenha('confirmarSenha', { required: true, validate: val => val === novaSenha || 'Senhas não coincidem' })}
-              type="password" className="input-field" placeholder="Confirmar" />
+              type="password" autoComplete="new-password" className="input-field" placeholder="Confirmar" />
             {errSenha.confirmarSenha && <p className="text-red-400 text-xs mt-1">{errSenha.confirmarSenha.message}</p>}
           </div>
           <button type="submit" className="btn-gold w-full justify-center">🔒 Alterar Senha</button>

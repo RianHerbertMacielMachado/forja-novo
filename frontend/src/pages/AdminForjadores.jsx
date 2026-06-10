@@ -170,7 +170,7 @@ const AdminForjadores = () => {
             <p className="text-forge-text-muted text-sm">Resetar senha de: <strong className="text-forge-gold">{resetSenhaModal.nome}</strong></p>
             <div>
               <label className="label">Nova Senha *</label>
-              <input {...regSenha('novaSenha', { required: true, minLength: { value: 8, message: 'Mínimo 8 caracteres' } })} type="password" className="input-field" placeholder="Nova senha" />
+              <input {...regSenha('novaSenha', { required: true, minLength: { value: 8, message: 'Mínimo 8 caracteres' } })} type="password" autoComplete="new-password" className="input-field" placeholder="Nova senha" />
               {errSenha.novaSenha && <p className="text-red-400 text-xs mt-1">{errSenha.novaSenha.message || 'Obrigatório'}</p>}
             </div>
             <div className="flex gap-3">
