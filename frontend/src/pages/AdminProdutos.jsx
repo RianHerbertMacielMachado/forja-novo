@@ -16,7 +16,18 @@ const AdminProdutos = () => {
   const [matProduto, setMatProduto] = useState([])
   const [salvando, setSalvando] = useState(false)
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm()
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm()
+  const tipoWatch = watch('tipo')
+
+  useEffect(() => {
+    if (tipoWatch === 'flechas') {
+      setValue('quantidade_minima', 100)
+      setValue('multiplo_quantidade', 100)
+    } else if (!editando) {
+      setValue('quantidade_minima', 1)
+      setValue('multiplo_quantidade', 1)
+    }
+  }, [tipoWatch, setValue, editando])
 
   const fetchData = async () => {
     try {
@@ -78,8 +89,8 @@ const AdminProdutos = () => {
       const payload = {
         ...data,
         valor_unitario: parseFloat(data.valor_unitario),
-        quantidade_minima: parseInt(data.quantidade_minima),
-        multiplo_quantidade: parseInt(data.multiplo_quantidade),
+        quantidade_minima: data.tipo === 'flechas' ? 100 : parseInt(data.quantidade_minima),
+        multiplo_quantidade: data.tipo === 'flechas' ? 100 : parseInt(data.multiplo_quantidade),
         ativo: data.ativo === true || data.ativo === 'true',
         materiais: matProduto.filter(m => m.material_id && m.quantidade > 0)
       }
@@ -237,11 +248,12 @@ const AdminProdutos = () => {
             <div>
               <label className="label">Quantidade Mínima</label>
               <input {...register('quantidade_minima')} type="number" min="1" className="input-field" />
+              <p className="text-xs text-forge-text-muted mt-1">Definido automaticamente conforme o tipo</p>
             </div>
             <div>
               <label className="label">Múltiplo de Quantidade</label>
               <input {...register('multiplo_quantidade')} type="number" min="1" className="input-field" />
-              <p className="text-xs text-forge-text-muted mt-1">Ex: 100 para Flechas</p>
+              <p className="text-xs text-forge-text-muted mt-1">Definido automaticamente conforme o tipo</p>
             </div>
             <div>
               <label className="label">Status</label>
