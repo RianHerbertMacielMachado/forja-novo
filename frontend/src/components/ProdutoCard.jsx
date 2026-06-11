@@ -63,7 +63,7 @@ const ProdutoCard = ({ produto, mostrarAddCarrinho = true, mostrarMateriais = tr
 
         <p className="text-forge-gold font-bold text-lg">
           R$ {parseFloat(produto.valor_unitario).toFixed(2).replace('.', ',')}
-          {isFlechas ? <span className="text-forge-text-muted text-sm font-normal"> / 100 un</span> : multiplo > 1 && <span className="text-forge-text-muted text-sm font-normal"> / {multiplo} un</span>}
+          {multiplo > 1 && <span className="text-forge-text-muted text-sm font-normal"> / {multiplo} un</span>}
         </p>
 
         {/* Materiais necessários */}

@@ -11,13 +11,13 @@ const pool = require('../database')
 
 async function runMigration () {
   const sql = fs.readFileSync(
-    path.join(__dirname, 'migration_allow_flechas_type.sql'),
+    path.join(__dirname, 'migration_add_discord_message_id.sql'),
     'utf8'
   )
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    console.log('🔧 Aplicando migration: allow_flechas_type ...')
+    console.log('🔧 Aplicando migration: discord_forjador_message_id ...')
     await client.query(sql)
     await client.query('COMMIT')
     console.log('✅ Migration aplicada com sucesso!')

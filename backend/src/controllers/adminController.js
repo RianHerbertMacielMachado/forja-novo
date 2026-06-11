@@ -265,18 +265,13 @@ const getProdutos = async (req, res) => {
 const createProduto = async (req, res) => {
   const { nome, tipo, valor_unitario, quantidade_minima = 1, multiplo_quantidade = 1, ativo = true, materiais = [] } = req.body
   if (!nome || !tipo || !valor_unitario) return res.status(400).json({ error: 'Nome, tipo e valor são obrigatórios' })
-  
-  // Para tipo 'flechas', forçar quantidade em múltiplos de 100
-  const finalQtdMinima = tipo === 'flechas' ? 100 : quantidade_minima
-  const finalMultiplo = tipo === 'flechas' ? 100 : multiplo_quantidade
-  
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     const result = await client.query(
       `INSERT INTO produtos (nome, tipo, valor_unitario, quantidade_minima, multiplo_quantidade, ativo)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [nome, tipo, valor_unitario, finalQtdMinima, finalMultiplo, ativo]
+      [nome, tipo, valor_unitario, quantidade_minima, multiplo_quantidade, ativo]
     )
     const produto = result.rows[0]
     for (const mat of materiais) {
@@ -343,20 +338,15 @@ const deleteProduto = async (req, res) => {
 const updateProduto = async (req, res) => {
   const { id } = req.params
   const { nome, tipo, valor_unitario, quantidade_minima, multiplo_quantidade, ativo, materiais } = req.body
-  
-  // Para tipo 'flechas', forçar quantidade em múltiplos de 100
-  const finalQtdMinima = tipo === 'flechas' ? 100 : quantidade_minima
-  const finalMultiplo = tipo === 'flechas' ? 100 : multiplo_quantidade
-  
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     await client.query(
       `UPDATE produtos SET nome = COALESCE($1, nome), tipo = COALESCE($2, tipo),
-       valor_unitario = COALESCE($3, valor_unitario), quantidade_minima = $4,
-       multiplo_quantidade = $5, ativo = COALESCE($6, ativo)
+       valor_unitario = COALESCE($3, valor_unitario), quantidade_minima = COALESCE($4, quantidade_minima),
+       multiplo_quantidade = COALESCE($5, multiplo_quantidade), ativo = COALESCE($6, ativo)
        WHERE id = $7`,
-      [nome, tipo, valor_unitario, finalQtdMinima, finalMultiplo, ativo, id]
+      [nome, tipo, valor_unitario, quantidade_minima, multiplo_quantidade, ativo, id]
     )
     if (materiais !== undefined) {
       await client.query('DELETE FROM produto_materiais WHERE produto_id = $1', [id])
