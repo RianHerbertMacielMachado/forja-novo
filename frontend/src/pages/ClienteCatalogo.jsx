@@ -93,7 +93,7 @@ const ClienteCatalogo = () => {
             className="input-field flex-1"
           />
           <div className="flex gap-2">
-            {['todos', 'basico', 'encantado'].map(tipo => (
+            {['todos', 'basico', 'encantado', 'flechas'].map(tipo => (
               <button
                 key={tipo}
                 onClick={() => setFiltroTipo(tipo)}
@@ -103,7 +103,7 @@ const ClienteCatalogo = () => {
                     : 'bg-forge-panel border border-forge-border text-forge-text-muted hover:text-forge-text'
                 }`}
               >
-                {tipo === 'todos' ? '🏪 Todos' : tipo === 'basico' ? '⚔️ Básicos' : '✨ Encantados'}
+                {tipo === 'todos' ? '🏪 Todos' : tipo === 'basico' ? '⚔️ Básicos' : tipo === 'encantado' ? '✨ Encantados' : '🏹 Flechas'}
               </button>
             ))}
           </div>

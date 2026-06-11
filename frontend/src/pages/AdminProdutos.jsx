@@ -153,8 +153,8 @@ const AdminProdutos = () => {
                   <tr key={p.id} className={`table-row ${!p.ativo ? 'opacity-50' : ''}`}>
                     <td className="px-4 py-3 font-medium">{p.nome}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={p.tipo === 'encantado' ? 'badge-encantado' : 'badge-basico'}>
-                        {p.tipo === 'encantado' ? '✨ Encantado' : '⚔️ Básico'}
+                      <span className={p.tipo === 'encantado' ? 'badge-encantado' : p.tipo === 'flechas' ? 'badge-flechas' : 'badge-basico'}>
+                        {p.tipo === 'encantado' ? '✨ Encantado' : p.tipo === 'flechas' ? '🏹 Flechas' : '⚔️ Básico'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-forge-gold font-medium">
@@ -226,6 +226,7 @@ const AdminProdutos = () => {
               <select {...register('tipo', { required: true })} className="select-field">
                 <option value="basico">⚔️ Básico</option>
                 <option value="encantado">✨ Encantado</option>
+                <option value="flechas">🏹 Flechas</option>
               </select>
             </div>
             <div>

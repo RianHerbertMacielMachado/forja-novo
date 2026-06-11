@@ -7,6 +7,7 @@ const ProdutoCard = ({ produto, mostrarAddCarrinho = true, mostrarMateriais = tr
   const { addItem } = useCarrinho()
 
   const isEncantado = produto.tipo === 'encantado'
+  const isFlechas = produto.tipo === 'flechas'
   const multiplo = produto.multiplo_quantidade || 1
   const qtdMin = produto.quantidade_minima || multiplo
 
@@ -56,7 +57,7 @@ const ProdutoCard = ({ produto, mostrarAddCarrinho = true, mostrarMateriais = tr
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-rajdhani font-bold text-forge-text leading-tight">{produto.nome}</h3>
           <span className={`shrink-0 ${isEncantado ? 'badge-encantado' : 'badge-basico'}`}>
-            {isEncantado ? '✨ Encantado' : '⚔️ Básico'}
+            {isEncantado ? '✨ Encantado' : isFlechas ? '🏹 Flechas' : '⚔️ Básico'}
           </span>
         </div>
 

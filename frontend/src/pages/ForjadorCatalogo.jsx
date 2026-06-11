@@ -96,12 +96,12 @@ const ForjadorCatalogo = () => {
           type="text" value={busca} onChange={e => setBusca(e.target.value)}
           placeholder="🔍 Buscar..." className="input-field max-w-xs"
         />
-        {['todos', 'basico', 'encantado'].map(tipo => (
+        {['todos', 'basico', 'encantado', 'flechas'].map(tipo => (
           <button key={tipo} onClick={() => setFiltroTipo(tipo)}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
               filtroTipo === tipo ? 'bg-forge-gold text-forge-bg' : 'bg-forge-panel border border-forge-border text-forge-text-muted hover:text-forge-text'
             }`}>
-            {tipo === 'todos' ? 'Todos' : tipo === 'basico' ? '⚔️ Básicos' : '✨ Encantados'}
+            {tipo === 'todos' ? 'Todos' : tipo === 'basico' ? '⚔️ Básicos' : tipo === 'encantado' ? '✨ Encantados' : '🏹 Flechas'}
           </button>
         ))}
       </div>
