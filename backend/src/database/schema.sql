@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS materiais (
 CREATE TABLE IF NOT EXISTS produtos (
   id SERIAL PRIMARY KEY,
   nome VARCHAR(150) UNIQUE NOT NULL,
-  tipo VARCHAR(20) CHECK(tipo IN ('basico', 'encantado', 'flechas')) NOT NULL,
+  tipo VARCHAR(20) CONSTRAINT produtos_tipo_check CHECK(tipo IN ('basico', 'encantado', 'flechas')) NOT NULL,
   valor_unitario NUMERIC(10,2) NOT NULL,
   quantidade_minima INTEGER DEFAULT 1,
   multiplo_quantidade INTEGER DEFAULT 1,
