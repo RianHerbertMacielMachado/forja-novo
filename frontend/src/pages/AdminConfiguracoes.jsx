@@ -10,12 +10,20 @@ const AdminConfiguracoes = () => {
   const [gerandoToken, setGerandoToken] = useState(false)
   const [testando, setTestando] = useState(null)
   const [salvando, setSalvando] = useState(null)
+  const [botTokenInput, setBotTokenInput] = useState('')
+  const [botTokenConfigurado, setBotTokenConfigurado] = useState(false)
 
   const { register: regSenha, handleSubmit: submitSenha, reset: resetSenha, watch, formState: { errors: errSenha } } = useForm()
 
   useEffect(() => {
     api.get('/admin/configuracoes')
-      .then(res => setConfig(res.data))
+      .then(res => {
+        setConfig(res.data)
+        // Verifica se o bot token já está configurado no backend
+        if (res.data.discord_bot_token === '***configurado***') {
+          setBotTokenConfigurado(true)
+        }
+      })
       .catch(() => toast.error('Erro ao carregar configurações'))
       .finally(() => setLoading(false))
   }, [])
@@ -28,6 +36,24 @@ const AdminConfiguracoes = () => {
       toast.success('Configuração salva!')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao salvar')
+    } finally { setSalvando(null) }
+  }
+
+  const salvarBotToken = async () => {
+    const token = botTokenInput.trim()
+    if (!token) {
+      toast.info('Digite um novo token para atualizar')
+      return
+    }
+    setSalvando('discord_bot_token')
+    try {
+      await api.post('/admin/configuracoes', { chave: 'discord_bot_token', valor: token })
+      setBotTokenConfigurado(true)
+      setBotTokenInput('')
+      setConfig(prev => ({ ...prev, discord_bot_token: '***configurado***' }))
+      toast.success('Bot Token salvo com sucesso!')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar Bot Token')
     } finally { setSalvando(null) }
   }
 
@@ -178,28 +204,27 @@ const AdminConfiguracoes = () => {
         <p className="text-xs text-forge-text-muted mb-4">
           Necessário para envio de DMs aos clientes com Discord quando o status do pedido mudar
         </p>
-        {!config.discord_bot_token && (
+        {!botTokenConfigurado && !botTokenInput && (
           <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3 mb-3">
             <p className="text-yellow-300 text-sm">⚠️ Bot Token não configurado — DMs para clientes estão desativadas</p>
+          </div>
+        )}
+        {botTokenConfigurado && (
+          <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-3 mb-3">
+            <p className="text-green-300 text-sm">✅ Bot Token configurado — digite um novo valor abaixo para substituir</p>
           </div>
         )}
         <div className="flex gap-2">
           <input
             type="password"
             autoComplete="off"
-            value={config.discord_bot_token === '***configurado***' ? '' : (config.discord_bot_token || '')}
-            onChange={e => setConfig(prev => ({ ...prev, discord_bot_token: e.target.value }))}
+            value={botTokenInput}
+            onChange={e => setBotTokenInput(e.target.value)}
             className="input-field flex-1 text-sm"
-            placeholder={config.discord_bot_token === '***configurado***' ? '● Bot Token configurado (deixe em branco para manter)' : 'Bot Token do Discord'}
+            placeholder={botTokenConfigurado ? '● Bot Token configurado (digite aqui para substituir)' : 'Bot Token do Discord'}
           />
           <button
-            onClick={() => {
-              if (config.discord_bot_token && config.discord_bot_token !== '***configurado***') {
-                salvarConfig('discord_bot_token', config.discord_bot_token)
-              } else {
-                toast.info('Digite um novo token para atualizar')
-              }
-            }}
+            onClick={salvarBotToken}
             disabled={salvando === 'discord_bot_token'}
             className="btn-gold text-sm py-2"
           >
